@@ -1,125 +1,147 @@
 import streamlit as st
 import random
+import time
 
-# Pokémon type effectiveness chart
-type_chart = {
-    "Fire": {"strong": "Grass", "weak": "Water"},
-    "Water": {"strong": "Fire", "weak": "Grass"},
-    "Grass": {"strong": "Water", "weak": "Fire"},
+st.set_page_config(page_title="Pokémon Battle Game", page_icon="🔥", layout="centered")
+
+# ----------------------------- #
+#       Pokémon Database        #
+# ----------------------------- #
+pokemon_data = {
+    "Pikachu": {
+        "attack": 55,
+        "defense": 40,
+        "hp": 120,
+        "image": "https://img.pokemondb.net/artwork/large/pikachu.jpg",
+        "moves": ["Thunderbolt", "Quick Attack", "Electro Ball", "Iron Tail"]
+    },
+    "Charizard": {
+        "attack": 84,
+        "defense": 78,
+        "hp": 160,
+        "image": "https://img.pokemondb.net/artwork/large/charizard.jpg",
+        "moves": ["Flamethrower", "Fly", "Fire Spin", "Dragon Claw"]
+    },
+    "Bulbasaur": {
+        "attack": 49,
+        "defense": 49,
+        "hp": 140,
+        "image": "https://img.pokemondb.net/artwork/large/bulbasaur.jpg",
+        "moves": ["Vine Whip", "Seed Bomb", "Tackle", "Razor Leaf"]
+    },
+    "Squirtle": {
+        "attack": 48,
+        "defense": 65,
+        "hp": 135,
+        "image": "https://img.pokemondb.net/artwork/large/squirtle.jpg",
+        "moves": ["Water Gun", "Bubble", "Bite", "Aqua Tail"]
+    },
+    "Gengar": {
+        "attack": 65,
+        "defense": 60,
+        "hp": 130,
+        "image": "https://img.pokemondb.net/artwork/large/gengar.jpg",
+        "moves": ["Shadow Ball", "Lick", "Dark Pulse", "Night Shade"]
+    }
 }
 
-# Pokémon class to track stats and battle mechanics
-class Pokemon:
-    def __init__(self, name, poke_type, hp, attack, defense, moves):
-        self.name = name
-        self.poke_type = poke_type
-        self.max_hp = hp
-        self.hp = hp
-        self.attack = attack
-        self.defense = defense
-        self.moves = moves
+# ----------------------------- #
+#         Game Setup            #
+# ----------------------------- #
+st.title("🎮 Advanced Pokémon Battle Game")
+st.write("Choose a Pokémon and battle turn-by-turn!")
 
-    def is_alive(self):
-        return self.hp > 0
+player_pokemon = st.selectbox("Select your Pokémon:", list(pokemon_data.keys()))
 
-    def take_damage(self, damage):
-        self.hp = max(0, self.hp - damage)
+# Opponent random Pokémon
+opponent_pokemon = random.choice(list(pokemon_data.keys()))
 
-    def use_move(self, move, opponent):
-        if move not in self.moves:
-            return f"{self.name} does not know {move}!"
-        multiplier = 1
-        if type_chart[self.poke_type]["strong"] == opponent.poke_type:
-            multiplier = 2
-        elif type_chart[self.poke_type]["weak"] == opponent.poke_type:
-            multiplier = 0.5
-        base_power = self.moves[move]
-        damage = int((base_power + self.attack - opponent.defense) * multiplier)
-        damage = max(damage, 1)  # Minimum damage
-        opponent.take_damage(damage)
-        eff_text = ""
-        if multiplier == 2:
-            eff_text = " It's super effective!"
-        elif multiplier == 0.5:
-            eff_text = " It's not very effective..."
-        return f"{self.name} used {move}!{eff_text} It dealt {damage} damage."
+# Initialize session state
+if "player_hp" not in st.session_state:
+    st.session_state.player_hp = pokemon_data[player_pokemon]["hp"]
 
-# Stateful storage of Pokémon and battle log
-if "pikachu" not in st.session_state:
-    st.session_state.pikachu = Pokemon(
-        name="Pikachu",
-        poke_type="Fire",
-        hp=60,
-        attack=18,
-        defense=8,
-        moves={"Thunderbolt": 20, "Quick Attack": 10},
-    )
-
-if "bulbasaur" not in st.session_state:
-    st.session_state.bulbasaur = Pokemon(
-        name="Bulbasaur",
-        poke_type="Grass",
-        hp=70,
-        attack=14,
-        defense=10,
-        moves={"Vine Whip": 18, "Tackle": 12},
-    )
-
-if "turn" not in st.session_state:
-    st.session_state.turn = 0  # 0 = player's turn (Pikachu), 1 = AI's (Bulbasaur)
+if "opponent_hp" not in st.session_state:
+    st.session_state.opponent_hp = pokemon_data[opponent_pokemon]["hp"]
 
 if "battle_log" not in st.session_state:
     st.session_state.battle_log = []
 
-if "battle_over" not in st.session_state:
-    st.session_state.battle_over = False
+# Pokémon side-by-side UI
+col1, col2 = st.columns(2)
 
-st.title("Simple Pokémon Battle in Streamlit")
+with col1:
+    st.subheader("Your Pokémon")
+    st.image(pokemon_data[player_pokemon]["image"], width=200)
+    st.write(f"**{player_pokemon} HP:**")
+    st.progress(st.session_state.player_hp / pokemon_data[player_pokemon]["hp"])
 
-# Display HP bars
-def hp_bar(pokemon):
-    bar_length = 100
-    hp_ratio = pokemon.hp / pokemon.max_hp
-    return f"{pokemon.name} HP: [{'█' * int(hp_ratio * 20):<20}] {pokemon.hp}/{pokemon.max_hp}"
+with col2:
+    st.subheader("Opponent Pokémon")
+    st.image(pokemon_data[opponent_pokemon]["image"], width=200)
+    st.write(f"**{opponent_pokemon} HP:**")
+    st.progress(st.session_state.opponent_hp / pokemon_data[opponent_pokemon]["hp"])
 
-st.write(hp_bar(st.session_state.pikachu))
-st.write(hp_bar(st.session_state.bulbasaur))
 
-# Show battle log
-st.subheader("Battle Log")
-for line in st.session_state.battle_log[-6:]:
-    st.write(line)
+# ----------------------------- #
+#       Damage Calculation      #
+# ----------------------------- #
+def calculate_damage(attacker, defender):
+    atk = pokemon_data[attacker]["attack"]
+    defn = pokemon_data[defender]["defense"]
 
-# Player's turn to choose a move
-if not st.session_state.battle_over:
-    if st.session_state.turn == 0:
-        st.subheader("Your turn! Choose a move:")
-        move = st.selectbox("Select move", list(st.session_state.pikachu.moves.keys()))
-        if st.button("Attack"):
-            msg = st.session_state.pikachu.use_move(move, st.session_state.bulbasaur)
-            st.session_state.battle_log.append(msg)
-            if not st.session_state.bulbasaur.is_alive():
-                st.session_state.battle_log.append(f"{st.session_state.bulbasaur.name} fainted! You win!")
-                st.session_state.battle_over = True
-            else:
-                st.session_state.turn = 1
+    base_damage = atk - (defn * 0.3)
+    random_factor = random.randint(5, 20)
 
-    # AI's turn
-    elif st.session_state.turn == 1:
-        st.subheader("Bulbasaur is attacking...")
-        move = random.choice(list(st.session_state.bulbasaur.moves.keys()))
-        msg = st.session_state.bulbasaur.use_move(move, st.session_state.pikachu)
-        st.session_state.battle_log.append(msg)
-        if not st.session_state.pikachu.is_alive():
-            st.session_state.battle_log.append(f"{st.session_state.pikachu.name} fainted! You lose!")
-            st.session_state.battle_over = True
-        else:
-            st.session_state.turn = 0
+    return max(10, int(base_damage + random_factor))
 
-# Button to reset the game
+
+# ----------------------------- #
+#         Battle System         #
+# ----------------------------- #
+st.subheader("⚔ Select Your Move")
+
+move_selected = st.radio(
+    "Choose an attack:",
+    pokemon_data[player_pokemon]["moves"]
+)
+
+if st.button("Attack"):
+    # Player attack
+    damage = calculate_damage(player_pokemon, opponent_pokemon)
+    st.session_state.opponent_hp -= damage
+    st.session_state.battle_log.append(f"🔥 {player_pokemon} used **{move_selected}** and dealt **{damage} damage**!")
+
+    time.sleep(0.5)
+
+    # Check if opponent fainted
+    if st.session_state.opponent_hp <= 0:
+        st.success(f"🎉 {player_pokemon} WINS the battle!")
+    else:
+        # Opponent counter-attack
+        opponent_move = random.choice(pokemon_data[opponent_pokemon]["moves"])
+        opp_damage = calculate_damage(opponent_pokemon, player_pokemon)
+        st.session_state.player_hp -= opp_damage
+        st.session_state.battle_log.append(
+            f"💀 {opponent_pokemon} used **{opponent_move}** and dealt **{opp_damage} damage**!"
+        )
+
+        if st.session_state.player_hp <= 0:
+            st.error(f"💀 {opponent_pokemon} defeats you... Game Over!")
+
+
+# ----------------------------- #
+#          Battle Log           #
+# ----------------------------- #
+st.subheader("📜 Battle Log")
+for log in st.session_state.battle_log[-10:]:
+    st.write(log)
+
+# Reset game
 if st.button("Restart Game"):
-    st.session_state.pikachu.hp = st.session_state.pikachu.max_hp
-    st.session_state.bulbasaur.hp = st.session_state.bulbasaur.max_hp
+    st.session_state.player_hp = pokemon_data[player_pokemon]["hp"]
+    st.session_state.opponent_hp = pokemon_data[opponent_pokemon]["hp"]
     st.session_state.battle_log = []
-    st.session_state.turn = 0
-    st.session_state.battle_over = False
+    st.experimental_rerun()
+
+st.write("---")
+st.caption("Made with ❤️ using Streamlit – Pokémon Battle Edition")
